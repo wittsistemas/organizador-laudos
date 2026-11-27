@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { lerPDFComGemini } from "./services/llm.service.js";
 import path from "path";
 import { chaveCidade, chaveEmpresa, formatarCidade } from "./services/nome-empresa.js";
+import { pastaExistente } from "./services/pasta-existente.js";
 
 import "dotenv/config";
 
@@ -28,24 +29,6 @@ function limparNomePasta(texto: string | null): string {
     .toUpperCase()
     .replace(/[/\\?%*:|"<>.]/g, "")
     .replace(/\s+/g, "_");
-}
-
-/**
- * Se já existe, dentro de `pai`, uma pasta equivalente (mesma chave), devolve o
- * nome dela. Assim "X LTDA" e "X LTDA ME" caem na mesma pasta de empresa, e
- * "CUBATAO" reaproveita a pasta "Cubatão".
- */
-function pastaExistente(
-  pai: string,
-  nome: string,
-  chave: (n: string) => string,
-): string {
-  if (!fs.existsSync(pai)) return nome;
-  const alvo = chave(nome);
-  const achada = fs
-    .readdirSync(pai, { withFileTypes: true })
-    .find((d) => d.isDirectory() && chave(d.name) === alvo);
-  return achada ? achada.name : nome;
 }
 
 /** Devolve um caminho livre: se o arquivo já existe no destino, acrescenta _2, _3... */
