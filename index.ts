@@ -2,6 +2,7 @@ import * as fs from "fs";
 
 import { lerPDFComGemini } from "./services/llm.service.js";
 import path from "path";
+import { chaveCidade, chaveEmpresa, formatarCidade } from "./services/nome-empresa.js";
 
 import "dotenv/config";
 
@@ -27,6 +28,24 @@ function limparNomePasta(texto: string | null): string {
     .toUpperCase()
     .replace(/[/\\?%*:|"<>.]/g, "")
     .replace(/\s+/g, "_");
+}
+
+/**
+ * Se já existe, dentro de `pai`, uma pasta equivalente (mesma chave), devolve o
+ * nome dela. Assim "X LTDA" e "X LTDA ME" caem na mesma pasta de empresa, e
+ * "CUBATAO" reaproveita a pasta "Cubatão".
+ */
+function pastaExistente(
+  pai: string,
+  nome: string,
+  chave: (n: string) => string,
+): string {
+  if (!fs.existsSync(pai)) return nome;
+  const alvo = chave(nome);
+  const achada = fs
+    .readdirSync(pai, { withFileTypes: true })
+    .find((d) => d.isDirectory() && chave(d.name) === alvo);
+  return achada ? achada.name : nome;
 }
 
 /** Devolve um caminho livre: se o arquivo já existe no destino, acrescenta _2, _3... */
@@ -80,11 +99,25 @@ async function buscarEProcessarArquivos(diretorioAtual: string) {
         console.log("Dados extraídos:", ia);
 
         const uf = limparNomePasta(ia.uf);
-        const cidade = limparNomePasta(ia.cidade);
-        const empresa = limparNomePasta(ia.empresa);
+        const identificado = !!(ia.uf && ia.cidade && ia.empresa);
+        // Cidade: inicial maiúscula com acento (Cubatão). Empresa: MAIÚSCULAS com "_".
+        // Reaproveita a pasta já existente da mesma cidade/empresa.
+        const cidade = identificado
+          ? pastaExistente(
+              path.join(pastaSaidaRaiz, uf),
+              formatarCidade(ia.cidade!),
+              chaveCidade,
+            )
+          : PASTA_NAO_IDENTIFICADO;
+        const empresa = identificado
+          ? pastaExistente(
+              path.join(pastaSaidaRaiz, uf, cidade),
+              limparNomePasta(ia.empresa),
+              chaveEmpresa,
+            )
+          : PASTA_NAO_IDENTIFICADO;
 
         // A IA respondeu mas não identificou tudo: vai para NAO_IDENTIFICADO (revisão manual).
-        const identificado = !!(ia.uf && ia.cidade && ia.empresa);
         const pastaDestino = identificado
           ? path.join(pastaSaidaRaiz, uf, cidade, empresa)
           : path.join(pastaSaidaRaiz, PASTA_NAO_IDENTIFICADO);
